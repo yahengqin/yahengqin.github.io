@@ -13,13 +13,7 @@
 <meta property="og:site_name" content="Hexo">
 <meta property="og:description" content="Kafka背景Kafka是由LinkedIn开发的一个分布式的消息系统，使用Scala编写，它以可水平扩展和高吞吐率而被广泛使用。 Kafka是一个消息系统，原本开发自LinkedIn，用作LinkedIn的活动流（Activity Stream）和运营数据处理管道（Pipeline）的基础。现在它已被多家不同类型的公司作为多种类型的数据管道和消息系统使用。 简介Kafka是一种分布式的，基于发布">
 <meta property="og:image" content="http://cdn2.infoqstatic.com/statics_s2_20170919-0429/resource/articles/kafka-analysis-part-1/zh/resources/0310020.png">
-<meta property="og:image" content="http://cdn.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310021.png">
-<meta property="og:image" content="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310022.png">
-<meta property="og:image" content="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310023.png">
-<meta property="og:image" content="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310025.png">
-<meta property="og:image" content="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310027.png">
-<meta property="og:image" content="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310026.png">
-<meta property="og:updated_time" content="2017-09-27T09:41:04.000Z">
+<meta property="og:updated_time" content="2018-11-04T14:03:01.990Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kafka">
 <meta name="twitter:description" content="Kafka背景Kafka是由LinkedIn开发的一个分布式的消息系统，使用Scala编写，它以可水平扩展和高吞吐率而被广泛使用。 Kafka是一个消息系统，原本开发自LinkedIn，用作LinkedIn的活动流（Activity Stream）和运营数据处理管道（Pipeline）的基础。现在它已被多家不同类型的公司作为多种类型的数据管道和消息系统使用。 简介Kafka是一种分布式的，基于发布">
@@ -61,9 +55,9 @@
       </nav>
       <nav id="sub-nav">
         
-          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="Flux RSS"></a>
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
         
-        <a id="nav-search-btn" class="nav-icon" title="Rechercher"></a>
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
       </nav>
       <div id="search-form-wrap">
         <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
@@ -127,25 +121,19 @@
 </ul>
 <h3 id="Topic-amp-Partition"><a href="#Topic-amp-Partition" class="headerlink" title="Topic &amp; Partition"></a>Topic &amp; Partition</h3><p>Topic在逻辑上可以被认为是一个queue，每条消息都必须指定它的Topic；可以简单理解为必须指明把这条消息放进哪个queue里。</p>
 <p>为了使得Kafka的吞吐率可以线性提高，物理上把Topic分成一个或多个Partition，每个Partition在物理上对应一个文件夹，该文件夹下存储这个Partition的所有消息和索引文件。</p>
-<p><img src="http://cdn.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310021.png" alt="img"></p>
 <p>每个日志文件都是一个log entrie序列。每条消息都有一个当前Partition下唯一的64字节的offset，它指明了这条消息的起始位置。磁盘上存储的消息格式如下：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">message length ： 4 bytes (value: 1+4+n)</div><div class="line">&quot;magic&quot; value ： 1 byte </div><div class="line">crc ： 4 bytes </div><div class="line">payload ： n bytes</div></pre></td></tr></table></figure>
 <p>这个log entries并非由一个文件构成，而是分成多个segment，每个segment以该segment第一条消息的offset命名并以“.kafka”为后缀。另外会有一个索引文件，它标明了每个segment下包含的log entry的offset范围，如下图所示。</p>
-<p><img src="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310022.png" alt="img"></p>
 <p>因为每条消息都被append到该Partition中，属于顺序写磁盘，因此效率非常高（经验证，顺序写磁盘效率比随机写内存还要高，这是Kafka高吞吐率的一个很重要的保证）。</p>
-<p><img src="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310023.png" alt="img"></p>
 <h3 id="Producer消息路由"><a href="#Producer消息路由" class="headerlink" title="Producer消息路由"></a>Producer消息路由</h3><p>Producer发送消息到broker时，会根据Paritition机制选择将其存储到哪一个Partition。</p>
 <p>如果Partition机制设置合理，所有消息可以均匀分布到不同的Partition里，这样就实现了负载均衡。如果一个Topic对应一个文件，那这个文件所在的机器I/O将会成为这个Topic的性能瓶颈，而有了Partition后，不同的消息可以并行写入不同broker的不同Partition里，极大的提高了吞吐率。</p>
 <p>在发送一条消息时，可以指定这条消息的key，Producer根据这个key和Partition机制来判断应该将这条消息发送到哪个Parition。Paritition机制可以通过指定Producer的paritition. class这一参数来指定，该class必须实现kafka.producer.Partitioner接口。</p>
 <h3 id="Consumer-Group"><a href="#Consumer-Group" class="headerlink" title="Consumer Group"></a>Consumer Group</h3><p>使用Consumer high level API时，同一Topic的一条消息只能被同一个Consumer Group内的一个Consumer消费，但多个Consumer Group可同时消费这一消息。</p>
-<p><img src="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310025.png" alt="img"></p>
 <p><strong>这是Kafka用来实现一个Topic消息的广播（发给所有的Consumer）和单播（发给某一个Consumer）的手段。</strong>一个Topic可以对应多个Consumer Group。如果需要实现广播，只要每个Consumer有一个独立的Group就可以了。要实现单播只要所有的Consumer在同一个Group里。用Consumer Group还可以将Consumer进行自由的分组而不需要多次发送消息到不同的Topic。</p>
 <p>Kafka会为每一个Consumer Group保留一些metadata信息——当前消费的消息的position，也即offset。这个offset由Consumer控制。正常情况下Consumer会在消费完一条消息后递增该offset。</p>
 <p><strong>因为offet由Consumer控制，所以Kafka broker是无状态的，它不需要标记哪些消息被哪些消费过，也不需要通过broker去保证同一个Consumer Group只有一个Consumer能消费某一条消息，因此也就不需要锁机制，这也为Kafka的高吞吐率提供了有力保障。</strong></p>
 <p>下面这个例子更清晰地展示了Kafka Consumer Group的特性。首先创建一个Topic (名为topic1，包含3个Partition)，然后创建一个属于group1的Consumer实例，并创建三个属于group2的Consumer实例，最后通过Producer向topic1发送key分别为1，2，3的消息。结果发现属于group1的Consumer收到了所有的这三条消息，同时group2中的3个Consumer分别收到了key为1，2，3的消息。如下图所示。</p>
-<p><img src="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310027.png" alt="img"></p>
 <p>实际上，Kafka的设计理念之一就是同时提供离线处理和实时处理。根据这一特性，可以使用Storm这种实时流处理系统对消息进行实时在线处理，同时使用Hadoop这种批处理系统进行离线处理，还可以同时将数据实时备份到另一个数据中心，只需要保证这三个操作所使用的Consumer属于不同的Consumer Group即可。下图是Kafka在Linkedin的一种简化部署示意图。</p>
-<p><img src="http://cdn3.infoqstatic.com/statics_s2_20170919-0429u4/resource/articles/kafka-analysis-part-1/zh/resources/0310026.png" alt="img"></p>
 <h3 id="Push-vs-Pull"><a href="#Push-vs-Pull" class="headerlink" title="Push vs. Pull"></a>Push vs. Pull</h3><p>作为一个消息系统，Kafka遵循了传统的方式，选择由Producer向broker push消息并由Consumer从broker pull消息。push模式和pull模式各有优劣。</p>
 <p>push模式很难适应消费速率不同的消费者，因为消息发送速率是由broker决定的。push模式的目标是尽可能以最快速度传递消息，但是这样很容易造成Consumer来不及处理消息，典型的表现就是拒绝服务以及网络拥塞。而pull模式则可以根据Consumer的消费能力以适当的速率消费消息。</p>
 <p>对于Kafka而言，pull模式更合适。pull模式可简化broker的设计，Consumer可自主控制消费消息的速率，同时Consumer可以自己控制消费方式——即可批量消费也可逐条消费，同时还能选择不同的提交方式从而实现不同的传输语义。</p>
@@ -203,7 +191,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2017/09/27/Kafka/" data-id="cj870iqid00003hs6122x10k7" class="article-share-link">Partager</a>
+      <a data-url="http://yoursite.com/2017/09/27/Kafka/" data-id="cjo2y5tqp00008t9i7vwqqp2f" class="article-share-link">Share</a>
       
       
   <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Kafka/">Kafka</a></li></ul>
@@ -224,7 +212,7 @@
   
     
   <div class="widget-wrap">
-    <h3 class="widget-title">Mot-clés</h3>
+    <h3 class="widget-title">Tags</h3>
     <div class="widget">
       <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/Kafka/">Kafka</a></li></ul>
     </div>
@@ -234,7 +222,7 @@
   
     
   <div class="widget-wrap">
-    <h3 class="widget-title">Nuage de mot-clés</h3>
+    <h3 class="widget-title">Tag Cloud</h3>
     <div class="widget tagcloud">
       <a href="/tags/Kafka/" style="font-size: 10px;">Kafka</a>
     </div>
@@ -253,7 +241,7 @@
   
     
   <div class="widget-wrap">
-    <h3 class="widget-title">Articles récents</h3>
+    <h3 class="widget-title">Recent Posts</h3>
     <div class="widget">
       <ul>
         
@@ -274,7 +262,7 @@
   <div class="outer">
     <div id="footer-info" class="inner">
       &copy; 2018 John Doe<br>
-      Propulsé by <a href="http://hexo.io/" target="_blank">Hexo</a>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
     </div>
   </div>
 </footer>
